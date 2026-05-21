@@ -1,0 +1,10 @@
+*.sh
+venv
+.env
+__pycache__
+*.out
+assignment3_llm_finetune.egg-info
+unsloth_compiled_cache
+outputs
+finetuned_model
+lecture/imdb_qwen05b_lora_50

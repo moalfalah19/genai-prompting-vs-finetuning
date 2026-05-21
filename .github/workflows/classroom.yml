@@ -1,0 +1,164 @@
+name: Autograding Tests
+
+on:
+  push:
+  repository_dispatch:
+
+permissions:
+  checks: write
+  actions: read
+  contents: read
+
+jobs:
+  run-autograding-tests:
+    runs-on: self-hosted
+    if: github.actor != 'github-classroom[bot]'
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ===============================
+      # FETCH HIDDEN TESTS 
+      # ===============================
+      - name: Fetch hidden tests (HTTPS)
+        env:
+          GH_TOKEN: ${{ secrets.HIDDEN_TESTS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rm -rf hidden_tests
+
+          git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/dat560-2026/assignment3-hidden-tests.git" hidden_tests
+
+          # Ensure target folders exist
+          mkdir -p data
+
+          # Copy hidden data (merge/overwrite)
+          if [ -d hidden_tests/data ]; then
+            cp -R hidden_tests/data/. data/
+          fi
+
+          # Replace tests completely with hidden tests
+          rm -rf tests
+          mkdir -p tests
+
+          if [ -d hidden_tests/tests ]; then
+            cp -R hidden_tests/tests/. tests/
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install uv
+          uv sync --no-dev
+
+      - name: Detect relevant file changes
+        id: changes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Determine comparison base
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            BASE="${{ github.event.before }}"
+            HEAD="${{ github.sha }}"
+          else
+            BASE="origin/${{ github.event.repository.default_branch }}"
+            git fetch origin "${{ github.event.repository.default_branch }}" --depth=1
+            HEAD="${{ github.sha }}"
+          fi
+
+          echo "Diff base: $BASE"
+          echo "Diff head: $HEAD"
+
+          CHANGED="$(git diff --name-only "$BASE" "$HEAD" || true)"
+          echo "Changed files:"
+          echo "$CHANGED"
+
+          PROMPTING_CHANGED=false
+          FINETUNE_CHANGED=false
+
+          if echo "$CHANGED" | grep -qE '^student/llm_prompting\.py$'; then
+            PROMPTING_CHANGED=true
+          fi
+
+          if echo "$CHANGED" | grep -qE '^student/llm_finetune\.py$'; then
+            FINETUNE_CHANGED=true
+          fi
+
+          # Enforce rule: never both in the same push
+          if [[ "$PROMPTING_CHANGED" == "true" && "$FINETUNE_CHANGED" == "true" ]]; then
+            echo "::error::Both student/llm_prompting.py and student/llm_finetune.py were modified in the same push. Please submit separate commits."
+            exit 1
+          fi
+
+          echo "prompting_changed=$PROMPTING_CHANGED" >> "$GITHUB_OUTPUT"
+          echo "finetune_changed=$FINETUNE_CHANGED" >> "$GITHUB_OUTPUT"
+
+      # ===============================
+      # PROMPTING FLOW
+      # ===============================
+
+      - name: Run prompting tests
+        if: steps.changes.outputs.prompting_changed == 'true'
+        env:
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+          PYTHONPATH: .
+        run: |
+          uv run pytest hidden_tests/test_prompting_components.py -q
+
+      - name: Run prompting pipeline
+        if: steps.changes.outputs.prompting_changed == 'true'
+        env:
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+        run: |
+          uv run python student/llm_prompting.py --test hidden_tests/factchecking_test_data.json
+
+      - name: Download prompting results
+        if: steps.changes.outputs.prompting_changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-prompting
+          path: evaluation_results_prompting.json
+
+      - name: Compute prompting scores
+        if: steps.changes.outputs.prompting_changed == 'true'
+        run: |
+          uv run python hidden_tests/compute_prompting_scores.py
+
+      # ===============================
+      # FINETUNING FLOW
+      # ===============================
+
+      - name: Run finetuning tests
+        if: steps.changes.outputs.finetune_changed == 'true'
+        env:
+          PYTHONPATH: .
+        run: |
+          uv run pytest hidden_tests/test_unsloth_lora_trainer.py -q
+
+      - name: Run finetuning pipeline
+        if: steps.changes.outputs.finetune_changed == 'true'
+        run: |
+          uv run python student/llm_finetune.py --num_epochs 5 --batch_size 8 --test_path hidden_tests/factchecking_test_data.json --quantization 4bit
+
+      - name: Download fine tuning results
+        if: steps.changes.outputs.finetune_changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-finetuning
+          path: evaluation_results_finetunning.json
+
+      - name: Compute finetuning scores
+        if: steps.changes.outputs.finetune_changed == 'true'
+        run: |
+          uv run python hidden_tests/compute_finetunning_scores.py

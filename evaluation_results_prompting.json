@@ -1,0 +1,29 @@
+{
+  "eval": {
+    "n": 144,
+    "accuracy": 25.694444444444443,
+    "f1_weighted": 0.38393997445721584,
+    "f1_macro": 0.1417624521072797,
+    "precision": 0.7591540404040404,
+    "recall": 0.2569444444444444,
+    "confusion_matrix": [
+      [0, 1, 0],
+      [83, 37, 10],
+      [7, 6, 0]
+    ],
+    "predictions_first_10": [
+      {
+        "claim": "Des vidéos d'hommes sauvant des bébés d'une chute",
+        "actual_label": "REFUTES",
+        "predicted_label": "SUPPORTS",
+        "raw_output": "SUPPORTS"
+      },
+      {
+        "claim": "A l’approche de la présidentielle centrafricaine, attention à ces images d'infrastructures provenant d’autres pays",
+        "actual_label": "REFUTES",
+        "predicted_label": "SUPPORTS",
+        "raw_output": "SUPPORTS"
+      }
+    ]
+  }
+}

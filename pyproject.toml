@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "assignment3-llm-finetune"
+version = "0.1.0"
+description = "LLM finetuning with Unsloth + LoRA for fact-checking"
+readme = "data/README.md"
+requires-python = "==3.12.*"
+
+
+
+dependencies = [
+    "torch",
+    "torchvision",
+    "transformers",
+    "datasets",
+    "trl",
+    "peft",
+    "unsloth @ git+https://github.com/unslothai/unsloth.git",
+    "unsloth_zoo",
+    "bitsandbytes",
+    "scikit-learn",
+    "pytest",
+    "datasets",
+    "dotenv",
+    "ollama",
+    "tqdm"
+]
+
+[tool.pytest.ini_options]
+markers = [
+  "slow: tests that are slow / require external services (e.g., Ollama)"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "black",
+    "ruff",
+]
+
+[project.urls]
+Repository = "https://github.com/dat560-2026/assignment3-llm-finetune"
+
+[tool.setuptools]
+packages = ["student"]
+
+[tool.black]
+line-length = 100
+target-version = ['py312']
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
